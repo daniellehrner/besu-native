@@ -36,49 +36,17 @@ sourceSets {
 
 dependencies {
   implementation project(':common')
-  implementation 'net.java.dev.jna:jna:5.12.1'
 
   // GraalVM SDK only for graal source set
   graalImplementation 'org.graalvm.sdk:graal-sdk:24.0.2'
 
   testImplementation 'com.google.guava:guava:31.1-jre'
-  testImplementation 'net.java.dev.jna:jna:5.12.1'
   testImplementation 'junit:junit:4.13.2'
   testImplementation 'org.assertj:assertj-core:3.22.0'
   testImplementation 'org.mockito:mockito-core:4.4.0'
   testImplementation 'io.consensys.tuweni:tuweni-bytes:2.7.1'
   testImplementation 'io.consensys.tuweni:tuweni-units:2.7.1'
 }
-
-task macArmLibCopy(type: Copy) {
-  from 'build/darwin-aarch64/lib/libsecp256k1.dylib'
-  into 'build/resources/main/lib-native/aarch64'
-}
-processResources.dependsOn macArmLibCopy
-
-task macLibCopy(type: Copy) {
-  from 'build/darwin-x86-64/lib/libsecp256k1.dylib'
-  into 'build/resources/main/lib-native/x86-64'
-}
-processResources.dependsOn macLibCopy
-
-task linuxLibCopy(type: Copy) {
-  from 'build/linux-gnu-x86_64/lib/libsecp256k1.so'
-  into 'build/resources/main/lib-native/x86-64'
-}
-processResources.dependsOn linuxLibCopy
-
-task linuxArm64LibCopy(type: Copy) {
-  from 'build/linux-gnu-aarch64/lib/libsecp256k1.so'
-  into 'build/resources/main/lib-native/aarch64'
-}
-processResources.dependsOn linuxArm64LibCopy
-
-task linuxRiscv64LibCopy(type: Copy) {
-  from 'build/linux-gnu-riscv64/lib/libsecp256k1.so'
-  into 'build/resources/main/lib-native/riscv64'
-}
-processResources.dependsOn linuxRiscv64LibCopy
 
 // JNI library copy tasks
 task macArmJNILibCopy(type: Copy) {
@@ -162,6 +130,20 @@ task prepareStaticResources {
   dependsOn macArmStaticLibCopy, macStaticLibCopy, linuxStaticLibCopy,
             linuxArm64StaticLibCopy, linuxRiscv64StaticLibCopy
 }
+
+// The signing context is created once per JVM, so its unrandomized variant needs a JVM of its own
+task testWithoutRandomization(type: Test) {
+  description = 'Runs the tests that use the signing context with an unrandomized one.'
+  group = 'verification'
+  testClassesDirs = sourceSets.test.output.classesDirs
+  classpath = sourceSets.test.runtimeClasspath
+  systemProperty 'secp256k1.randomize', 'false'
+  filter {
+    includeTestsMatching '*LibSecp256k1JNISignTest'
+    includeTestsMatching '*LibSecp256k1JNIPublicKeyTest'
+  }
+}
+check.dependsOn testWithoutRandomization
 
 jar {
   archiveBaseName = 'besu-native-secp256k1'

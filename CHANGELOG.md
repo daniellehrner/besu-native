@@ -1,6 +1,10 @@
 # Changelog
 
 # 2.2.0-SNAPSHOT (Unreleased)
+* BREAKING: Remove the JNA class `LibSecp256k1` and the bundled libsecp256k1 shared library, use `LibSecp256k1JNI` instead.
+* Bind `LibSecp256k1JNI` with JNI instead of JNA and link libsecp256k1 statically into its library.
+* Add ECDSA signing, verification and signature normalization, public key creation and public key parsing to `LibSecp256k1JNI`.
+* Accept recovery ids 2 and 3 in the native `secp256k1_ecrecover_jni`, while the `ecrecover` wrappers still accept only 0 and 1.
 
 
 # 2.1.0 - 2026-10-19

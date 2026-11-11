@@ -100,7 +100,7 @@ public class LibSecp256k1EcrecoverGraal {
      *
      * @param messageHash pointer to 32-byte message hash
      * @param signature pointer to 64-byte compact signature (r || s)
-     * @param recoveryId recovery ID (0 or 1)
+     * @param recoveryId recovery ID (0, 1, 2 or 3)
      * @param outputBuffer pointer to 65-byte output buffer for uncompressed public key
      * @return 0 if recovery was successful, 1 otherwise
      */

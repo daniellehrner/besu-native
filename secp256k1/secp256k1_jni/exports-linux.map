@@ -1,0 +1,8 @@
+{
+  global:
+    Java_org_hyperledger_besu_nativelib_secp256k1_LibSecp256k1JNI_*;
+    secp256k1_ecrecover_jni;
+    secp256k1_ecdh_jni;
+  local:
+    *;
+};

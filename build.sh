@@ -5,7 +5,8 @@
 #############################
 
 # Edit this variable to change the build options for secp256k1
-SECP256K1_BUILD_OPTS="--enable-module-recovery"
+# PIC and static only, because it is linked into the JNI shared library
+SECP256K1_BUILD_OPTS="--enable-module-recovery --with-pic --disable-shared"
 
 #############################
 ####### End Variables #######

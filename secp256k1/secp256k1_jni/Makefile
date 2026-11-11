@@ -10,12 +10,14 @@ LIB_DIR = $(BUILD_DIR)/lib
 CC = gcc
 CFLAGS = -Wall -Wextra -O3 -fPIC -std=c99
 INCLUDES = -I$(SECP256K1_DIR)/include -I$(SECP256K1_DIR)/src
+JNI_INCLUDES = -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/$(JNI_OS_DIR)
 LDFLAGS = -shared
 LDFLAGS_STATIC =
-LIBS = -L$(SECP256K1_DIR)/.libs -lsecp256k1
+# linked into the shared library, so that it does not depend on a libsecp256k1 shared library
 LIBS_STATIC = $(SECP256K1_DIR)/.libs/libsecp256k1.a
 
-# Platform-specific settings
+# Platform-specific settings. EXPORTS lists the symbols the shared library exports: the JNI and
+# the plain C functions, not the API of the libsecp256k1 linked into it.
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
 
@@ -23,12 +25,16 @@ ifeq ($(UNAME_S),Darwin)
     PLATFORM = darwin
     SHARED_EXT = dylib
     STATIC_EXT = a
-    LDFLAGS += -undefined dynamic_lookup
+    JNI_OS_DIR = darwin
+    EXPORTS = exports-darwin.txt
+    LDFLAGS += -Wl,-exported_symbols_list,$(EXPORTS)
 else ifeq ($(UNAME_S),Linux)
     PLATFORM = linux-gnu
     SHARED_EXT = so
     STATIC_EXT = a
-    LDFLAGS += -Wl,-soname,libsecp256k1_ecrecover.$(SHARED_EXT)
+    JNI_OS_DIR = linux
+    EXPORTS = exports-linux.map
+    LDFLAGS += -Wl,-soname,libsecp256k1_ecrecover.$(SHARED_EXT) -Wl,--version-script=$(EXPORTS) -Wl,-z,defs
 else
     $(error Unsupported platform: $(UNAME_S))
 endif
@@ -49,9 +55,16 @@ TARGET_LIB = $(TARGET_LIB_DIR)/libsecp256k1_ecrecover.$(SHARED_EXT)
 TARGET_STATIC_LIB = $(TARGET_LIB_DIR)/libsecp256k1_ecrecover.$(STATIC_EXT)
 TARGET_HEADER = $(TARGET_LIB_DIR)/secp256k1_ecrecover.h
 
-# Source files
+ifeq ($(JAVA_HOME),)
+    $(error JAVA_HOME must be set to find jni.h)
+endif
+
+# Source files. The JNI glue only goes into the shared library, the static library for GraalVM
+# native-image has the plain C functions only.
 SOURCES = secp256k1_ecrecover.c
 OBJECTS = $(SOURCES:%.c=$(OBJ_DIR)/%.o)
+JNI_SOURCES = secp256k1_jni.c
+JNI_OBJECTS = $(JNI_SOURCES:%.c=$(OBJ_DIR)/%.o)
 
 # Default target
 all: $(TARGET_LIB) $(TARGET_STATIC_LIB) $(TARGET_LIB_DIR)/libsecp256k1.a $(TARGET_HEADER) $(TARGET_LIB_DIR)/secp256k1.h $(TARGET_LIB_DIR)/secp256k1_recovery.h
@@ -61,12 +74,14 @@ $(OBJ_DIR) $(TARGET_LIB_DIR):
 	mkdir -p $@
 
 # Compile source files
-$(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
+$(OBJ_DIR)/%.o: %.c secp256k1_ecrecover.h | $(OBJ_DIR)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
+$(JNI_OBJECTS): INCLUDES += $(JNI_INCLUDES)
+
 # Link shared library
-$(TARGET_LIB): $(OBJECTS) | $(TARGET_LIB_DIR)
-	$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBS)
+$(TARGET_LIB): $(OBJECTS) $(JNI_OBJECTS) $(LIBS_STATIC) $(EXPORTS) | $(TARGET_LIB_DIR)
+	$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(JNI_OBJECTS) $(LIBS_STATIC)
 
 # Create static library (JNI wrapper only, not including libsecp256k1.a)
 $(TARGET_STATIC_LIB): $(OBJECTS) | $(TARGET_LIB_DIR)
@@ -89,7 +104,7 @@ $(TARGET_LIB_DIR)/secp256k1_recovery.h: $(SECP256K1_DIR)/include/secp256k1_recov
 
 # Build secp256k1 dependency if needed
 $(SECP256K1_DIR)/libsecp256k1.la:
-	cd $(SECP256K1_DIR) && ./autogen.sh && ./configure --enable-module-recovery --enable-shared && make
+	cd $(SECP256K1_DIR) && ./autogen.sh && ./configure --enable-module-recovery --with-pic --disable-shared && make
 
 secp256k1: $(SECP256K1_DIR)/libsecp256k1.la
 
